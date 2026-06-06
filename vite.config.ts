@@ -33,8 +33,6 @@ export default defineConfig(async ({ mode }) => ({
         manualChunks(id: string) {
           if (!id.includes("node_modules")) return;
 
-          // Each AI provider SDK in its own chunk so unused providers
-          // don't bloat the initial load (lazy-imported in agent.ts).
           if (id.includes("@ai-sdk/anthropic")) return "ai-anthropic";
           if (id.includes("@ai-sdk/google")) return "ai-google";
           if (id.includes("@ai-sdk/openai-compatible"))
@@ -70,9 +68,10 @@ export default defineConfig(async ({ mode }) => ({
   },
   clearScreen: false,
   server: {
-    port: 1420,
+    port: 5000,
     strictPort: true,
-    host: host || false,
+    host: "0.0.0.0",
+    allowedHosts: true,
     hmr: host
       ? {
           protocol: "ws",
