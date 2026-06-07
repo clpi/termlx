@@ -1,7 +1,10 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import * as pty from "node-pty";
 import { sidFromCookieHeader, ensureSessionDirs } from "./session.mjs";
+
+const RCFILE = fileURLToPath(new URL("./shell-integration.bash", import.meta.url));
 
 /** Clamp a requested terminal cwd to the session workspace. Falls back to the
  *  workspace root for anything that resolves outside it. */
@@ -42,7 +45,15 @@ export function attachPtyServer(httpServer) {
       if (msg.type === "open") {
         if (term) return;
         const cwd = safeCwd(msg.cwd, workspace);
-        term = pty.spawn(SHELL, [], {
+        // Interactive bash ignores PS1/PROMPT_COMMAND from the environment, so
+        // shell integration (OSC 7 cwd + OSC 133 prompt markers) is installed
+        // via an rcfile. --rcfile is bash-specific, and the rcfile is bash
+        // syntax, so we always run bash here (using $SHELL only when it already
+        // is bash) rather than honoring a non-bash $SHELL.
+        const isBash = /(^|\/)bash$/.test(SHELL);
+        const file = isBash ? SHELL : "bash";
+        const args = ["--rcfile", RCFILE, "-i"];
+        term = pty.spawn(file, args, {
           name: "xterm-256color",
           cols: msg.cols || 80,
           rows: msg.rows || 24,
@@ -52,7 +63,6 @@ export function attachPtyServer(httpServer) {
             HOME: workspace,
             PWD: cwd,
             TERM: "xterm-256color",
-            PS1: "\\[\\e[36m\\]\\w\\[\\e[0m\\] $ ",
           },
         });
         term.onData((data) => {

@@ -84,7 +84,13 @@ interface HookOptions {
 export function useUpdater({ autoCheck = true }: HookOptions = {}) {
   const [status, setStatus] = useState<UpdaterStatus>({ kind: "idle" });
 
-  const runCheck = useCallback(async ({ manual }: Options = {}) => {
+  const runCheck = useCallback(async (_opts: Options = {}) => {
+    // Running as a web app: there is no client-side package to self-update
+    // (the deployment is updated server-side), so the updater is a no-op.
+    setStatus({ kind: "uptodate" });
+    return;
+    // eslint-disable-next-line no-unreachable
+    const { manual } = _opts;
     if (!manual) {
       const last = Number(localStorage.getItem(LAST_CHECK_KEY) ?? 0);
       if (Date.now() - last < CHECK_INTERVAL_MS) return;

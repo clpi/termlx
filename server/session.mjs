@@ -3,7 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const DATA_DIR = path.join(process.cwd(), "data");
-export const SESSIONS_DIR = path.join(DATA_DIR, "sessions");
+// A single shared, persistent environment used by every visitor. The session
+// cookie still identifies each browser (for the PTY socket and per-tab job
+// scoping), but workspace/settings/secrets all resolve to this shared dir.
+export const SHARED_DIR = path.join(DATA_DIR, "shared");
 
 const COOKIE = "terax_sid";
 
@@ -12,7 +15,7 @@ function validSid(sid) {
 }
 
 export function ensureSessionDirs(sid) {
-  const dir = path.join(SESSIONS_DIR, sid);
+  const dir = SHARED_DIR;
   const workspace = path.join(dir, "workspace");
   const storesDir = path.join(dir, "stores");
   const secretsFile = path.join(dir, "secrets.json");
@@ -22,7 +25,7 @@ export function ensureSessionDirs(sid) {
   if (firstTime) {
     fs.writeFileSync(
       path.join(workspace, "README.md"),
-      `# Your Terax workspace\n\nThis is your personal, persistent sandbox. Files you create here\n(in the editor or from the terminal) are saved and will be here next time.\n\nTry it: open a terminal and run\n\n    echo "hello from $(whoami)" > hello.txt\n    ls -la\n`,
+      `# Terax shared workspace\n\nThis is a shared, persistent environment. Everyone who opens this app\nsees and edits the same files here. Anything you create (in the editor or\nfrom the terminal) is saved and will be here next time, for everyone.\n\nTry it: open a terminal and run\n\n    echo "hello from $(whoami)" > hello.txt\n    ls -la\n`,
     );
   }
   return { sid, dir, workspace, storesDir, secretsFile };
