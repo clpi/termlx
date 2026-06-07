@@ -7,6 +7,7 @@ import { userFromCookieHeader } from "./auth.mjs";
 
 const RCFILE = fileURLToPath(new URL("./shell-integration.bash", import.meta.url));
 const GAMES_DIR = fileURLToPath(new URL("./games", import.meta.url));
+const TOOLS_DIR = fileURLToPath(new URL("./tools", import.meta.url));
 
 /** Clamp a requested terminal cwd to the session workspace. Falls back to the
  *  workspace root for anything that resolves outside it. */
@@ -92,6 +93,8 @@ export function attachPtyServer(httpServer) {
             // Terminal arcade: launcher/games dir + shared leaderboard storage.
             TERAX_GAMES_DIR: GAMES_DIR,
             TERAX_GAMES_DATA: storesDir,
+            // Terminal tools: text editor + web browser.
+            TERAX_TOOLS_DIR: TOOLS_DIR,
             TERAX_NODE: process.execPath,
           },
         });

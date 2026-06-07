@@ -17,12 +17,22 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const rndInt = (n) => Math.floor(Math.random() * n);
 export const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
-/** Decode a single non-escape byte into a key name (or null). */
-export function decodeByte(b) {
+/** Strip terminal control characters from untrusted content (remote pages,
+ *  file contents) so it can't emit escape sequences that spoof the screen.
+ *  Keeps printable text, plus tab (0x09) and newline (0x0a); drops ESC, CR,
+ *  other C0/C1 controls and DEL. Callers handle tab expansion themselves. */
+export const sanitizeText = (s) => s.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "");
+
+/** Decode a single non-escape byte into a key name (or null). In "text" mode,
+ *  printable characters keep their case and Ctrl+letter becomes "ctrl-<x>" — so
+ *  the text editor can tell `S` from `s` and catch ^S/^Q. "game" mode lowercases. */
+export function decodeByte(b, mode = "game") {
   switch (b) {
     case 0x0d:
     case 0x0a:
       return "enter";
+    case 0x09:
+      return "tab";
     case 0x20:
       return "space";
     case 0x7f:
@@ -33,28 +43,69 @@ export function decodeByte(b) {
     case 0x1b:
       return "escape";
   }
+  if (mode === "text") {
+    if (b >= 1 && b <= 26) return `ctrl-${String.fromCharCode(96 + b)}`;
+    if (b >= 32 && b < 127) return String.fromCharCode(b);
+    return null;
+  }
   if (b >= 32 && b < 127) return String.fromCharCode(b).toLowerCase();
+  return null;
+}
+
+/** Map a parsed CSI/SS3 sequence (e.g. "5~" → pagedown) to a key name. */
+function csiKey(params, final) {
+  switch (final) {
+    case 0x41:
+      return "up";
+    case 0x42:
+      return "down";
+    case 0x43:
+      return "right";
+    case 0x44:
+      return "left";
+    case 0x48:
+      return "home";
+    case 0x46:
+      return "end";
+    case 0x7e:
+      switch (params) {
+        case "1":
+        case "7":
+          return "home";
+        case "4":
+        case "8":
+          return "end";
+        case "3":
+          return "delete";
+        case "5":
+          return "pageup";
+        case "6":
+          return "pagedown";
+      }
+      return null;
+  }
   return null;
 }
 
 /** Consume one key from the front of a buffer. Returns { key, len } or null
  *  when more bytes are needed to complete a (possibly fragmented) sequence. */
-function takeKey(buf) {
-  if (buf[0] === 0x1b) {
-    if (buf.length < 2) return null; // could be a lone ESC or a split arrow
-    if (buf[1] === 0x5b || buf[1] === 0x4f) {
-      // CSI / SS3 — arrow keys
-      if (buf.length < 3) return null;
-      const map = { 0x41: "up", 0x42: "down", 0x43: "right", 0x44: "left" };
-      return { key: map[buf[2]] || null, len: 3 };
-    }
-    return { key: "escape", len: 1 };
+function takeKey(buf, mode) {
+  if (buf[0] !== 0x1b) return { key: decodeByte(buf[0], mode), len: 1 };
+  if (buf.length < 2) return null; // lone ESC, or a split escape sequence
+  if (buf[1] === 0x5b || buf[1] === 0x4f) {
+    // CSI ("[") or SS3 ("O") — scan optional numeric params then a final byte.
+    let i = 2;
+    while (i < buf.length && buf[i] >= 0x30 && buf[i] <= 0x3f) i++;
+    if (i >= buf.length) return null; // sequence not fully arrived yet
+    return { key: csiKey(buf.toString("latin1", 2, i), buf[i]), len: i + 1 };
   }
-  return { key: decodeByte(buf[0]), len: 1 };
+  return { key: "escape", len: 1 };
 }
 
-/** Set up the alternate screen + raw input and return a small drawing API. */
-export function createScreen() {
+/** Set up the alternate screen + raw input and return a small drawing API.
+ *  Pass { mode: "text" } for case-preserving input (the editor/browser). */
+export function createScreen(opts = {}) {
+  const mode = opts.mode === "text" ? "text" : "game";
   const out = process.stdout;
   let handler = null;
   let active = false;
@@ -68,7 +119,7 @@ export function createScreen() {
       flushTimer = null;
     }
     while (pending.length) {
-      const r = takeKey(pending);
+      const r = takeKey(pending, mode);
       if (!r) break; // incomplete sequence — wait for more bytes
       pending = pending.subarray(r.len);
       if (r.key) dispatch(r.key);
@@ -81,7 +132,7 @@ export function createScreen() {
         const buf = pending;
         pending = Buffer.alloc(0);
         for (const b of buf) {
-          const k = decodeByte(b);
+          const k = decodeByte(b, mode);
           if (k) dispatch(k);
         }
       }, 50);
@@ -150,6 +201,44 @@ export function createScreen() {
 /** Resolve on the next key press. */
 export function nextKey(screen) {
   return new Promise((res) => screen.onKey((k) => res(k)));
+}
+
+/** Single-line text input drawn at (x, y). Resolves with the typed string on
+ *  Enter, or null on Escape. The screen must be in { mode: "text" }. */
+export function readLine(screen, x, y, { initial = "", prompt = "", width = 70 } = {}) {
+  let value = initial;
+  return new Promise((resolve) => {
+    const draw = () => {
+      const full = prompt + value;
+      const shown = full.length > width ? full.slice(full.length - width) : full;
+      screen.moveTo(x, y);
+      screen.write(`${color.reset}${shown}${ESC}[K`);
+    };
+    screen.write(`${ESC}[?25h`); // show cursor while typing
+    draw();
+    screen.onKey((k) => {
+      if (k === "enter") {
+        screen.write(`${ESC}[?25l`);
+        return resolve(value);
+      }
+      if (k === "escape") {
+        screen.write(`${ESC}[?25l`);
+        return resolve(null);
+      }
+      if (k === "backspace") {
+        value = value.slice(0, -1);
+        return draw();
+      }
+      if (k === "space") {
+        value += " ";
+        return draw();
+      }
+      if (k.length === 1) {
+        value += k;
+        draw();
+      }
+    });
+  });
 }
 
 /** Arcade-style initials entry. Returns up to `maxLen` uppercase chars. */

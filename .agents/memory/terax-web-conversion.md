@@ -93,3 +93,20 @@ single shared one (per the model above); auth adds NO per-user isolation.
 `settings.html` is already a Vite MPA entry; cross-window pref sync works because the
 event shim (`tauri-event.ts`) is built on `BroadcastChannel`. Do `window.open`
 synchronously inside the invoke case (before any await) so it isn't popup-blocked.
+
+## Terminal tools (editor + web browser) — sanitize untrusted content
+`edit <file>` (nano-style editor) and `browse <url>`/`web` (text web browser) are
+Node ESM TUIs in `server/tools/`, launched from bash via aliases (guarded by
+`[ -n "$TERAX_TOOLS_DIR" ]`). `pty.mjs` injects `TERAX_TOOLS_DIR`. They reuse
+`server/games/lib/term.mjs`. `commands`/`cmds` print the full command list.
+- **`term.mjs` has two input modes.** `createScreen({mode:"text"})` preserves case
+  and emits `ctrl-<x>`/`tab`/`home`/`end`/`page*`/`delete`; default `"game"` mode
+  lowercases letters (games depend on this). Don't remove the mode split.
+- **Any untrusted content written to a PTY must be run through `sanitizeText()`**
+  first — a remote page or opened file can contain ESC/CSI/OSC sequences (or encode
+  them via `&#27;`) that spoof or hijack the terminal. Sanitize AFTER HTML-entity
+  decoding, not before. Editor sanitizes file content on load (keeps tabs/newlines).
+- **Guard `String.fromCodePoint`** when decoding numeric HTML entities (range-check
+  0..0x10FFFF + try/catch) or a malformed `&#…;` throws and aborts the whole page.
+- Editor keeps real tabs in the buffer (so Makefiles survive) but expands them for
+  display and does tab-aware cursor/scroll math (`dispCol`/`expandTabs`, TABW=8).

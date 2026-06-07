@@ -29,5 +29,17 @@ if [ -n "$TERAX_GAMES_DIR" ]; then
   alias mines='"${TERAX_NODE:-node}" "$TERAX_GAMES_DIR/minesweeper.mjs"'
   alias dungeon='"${TERAX_NODE:-node}" "$TERAX_GAMES_DIR/dungeon.mjs"'
   alias 2048='"${TERAX_NODE:-node}" "$TERAX_GAMES_DIR/2048.mjs"'
-  printf '\033[2mtip: type \033[0m\033[1;36mgames\033[0m\033[2m to play the arcade (snake \302\267 mines \302\267 dungeon \302\267 2048)\033[0m\n'
+fi
+
+# Terax tools: terminal text editor + web browser, plus a command list.
+if [ -n "$TERAX_TOOLS_DIR" ]; then
+  alias edit='"${TERAX_NODE:-node}" "$TERAX_TOOLS_DIR/edit.mjs"'
+  alias browse='"${TERAX_NODE:-node}" "$TERAX_TOOLS_DIR/browse.mjs"'
+  alias web='"${TERAX_NODE:-node}" "$TERAX_TOOLS_DIR/browse.mjs"'
+  alias commands='"${TERAX_NODE:-node}" "$TERAX_TOOLS_DIR/commands.mjs"'
+  alias cmds='"${TERAX_NODE:-node}" "$TERAX_TOOLS_DIR/commands.mjs"'
+fi
+
+if [ -n "$TERAX_GAMES_DIR" ] || [ -n "$TERAX_TOOLS_DIR" ]; then
+  printf '\033[2mtip: type \033[0m\033[1;36mcommands\033[0m\033[2m to see what you can do (games \302\267 edit \302\267 browse)\033[0m\n'
 fi
