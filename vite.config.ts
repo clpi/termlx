@@ -11,6 +11,18 @@ export default defineConfig(async ({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@tauri-apps/api/core": path.resolve(__dirname, "./src/shims/tauri-core.ts"),
+      "@tauri-apps/api/event": path.resolve(__dirname, "./src/shims/tauri-event.ts"),
+      "@tauri-apps/api/window": path.resolve(__dirname, "./src/shims/tauri-window.ts"),
+      "@tauri-apps/api/webviewWindow": path.resolve(__dirname, "./src/shims/tauri-webviewWindow.ts"),
+      "@tauri-apps/api/path": path.resolve(__dirname, "./src/shims/tauri-path.ts"),
+      "@tauri-apps/api/app": path.resolve(__dirname, "./src/shims/tauri-app.ts"),
+      "@tauri-apps/plugin-store": path.resolve(__dirname, "./src/shims/plugin-store.ts"),
+      "@tauri-apps/plugin-os": path.resolve(__dirname, "./src/shims/plugin-os.ts"),
+      "@tauri-apps/plugin-opener": path.resolve(__dirname, "./src/shims/plugin-opener.ts"),
+      "@tauri-apps/plugin-process": path.resolve(__dirname, "./src/shims/plugin-process.ts"),
+      "@tauri-apps/plugin-updater": path.resolve(__dirname, "./src/shims/plugin-updater.ts"),
+      "@tauri-apps/plugin-autostart": path.resolve(__dirname, "./src/shims/plugin-autostart.ts"),
     },
   },
   esbuild: {
@@ -72,6 +84,17 @@ export default defineConfig(async ({ mode }) => ({
     strictPort: true,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:3001",
+        changeOrigin: true,
+      },
+      "/ws": {
+        target: "http://127.0.0.1:3001",
+        ws: true,
+        changeOrigin: true,
+      },
+    },
     hmr: host
       ? {
           protocol: "ws",

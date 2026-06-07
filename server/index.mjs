@@ -1,4 +1,5 @@
 import http from "node:http";
+import path from "node:path";
 import express from "express";
 import cookieParser from "cookie-parser";
 import { sessionMiddleware } from "./session.mjs";
@@ -9,11 +10,12 @@ import * as store from "./store.mjs";
 import * as net from "./net.mjs";
 import { attachPtyServer } from "./pty.mjs";
 
-const PORT = process.env.BACKEND_PORT || 3001;
+const IS_PROD = process.env.NODE_ENV === "production";
+const PORT = process.env.PORT || process.env.BACKEND_PORT || (IS_PROD ? 5000 : 3001);
 const app = express();
 app.use(express.json({ limit: "32mb" }));
 app.use(cookieParser());
-app.use(sessionMiddleware);
+app.use("/api", sessionMiddleware);
 
 app.get("/api/session", (req, res) => {
   res.json({ home: req.session.workspace, platform: "linux", name: "Terax" });
@@ -57,13 +59,13 @@ function buildHandlers(s) {
     list_subdirs: (a) => fsops.listSubdirs(root, a),
 
     shell_run_command: (a) => shell.runCommand(root, a),
-    shell_session_open: (a) => shell.sessionOpen(root, a),
-    shell_session_run: (a) => shell.sessionRun(root, a),
-    shell_session_close: (a) => shell.sessionClose(root, a),
-    shell_bg_spawn: (a) => shell.bgSpawn(root, a),
-    shell_bg_logs: (a) => shell.bgLogs(root, a),
-    shell_bg_kill: (a) => shell.bgKill(root, a),
-    shell_bg_list: () => shell.bgList(),
+    shell_session_open: (a) => shell.sessionOpen(root, s.sid, a),
+    shell_session_run: (a) => shell.sessionRun(root, s.sid, a),
+    shell_session_close: (a) => shell.sessionClose(root, s.sid, a),
+    shell_bg_spawn: (a) => shell.bgSpawn(root, s.sid, a),
+    shell_bg_logs: (a) => shell.bgLogs(root, s.sid, a),
+    shell_bg_kill: (a) => shell.bgKill(root, s.sid, a),
+    shell_bg_list: () => shell.bgList(root, s.sid),
 
     secrets_get: (a) => secrets.secretsGet(s.secretsFile, a),
     secrets_set: (a) => secrets.secretsSet(s.secretsFile, a),
@@ -97,6 +99,17 @@ app.post("/api/invoke", async (req, res) => {
     res.json({ ok: false, error: String(e?.message ?? e) });
   }
 });
+
+// In production the Node server also serves the built frontend (dev uses Vite).
+if (IS_PROD) {
+  const dist = path.join(process.cwd(), "dist");
+  app.use(express.static(dist));
+  app.use((req, res, next) => {
+    if (req.method !== "GET") return next();
+    if (req.path.startsWith("/api") || req.path.startsWith("/ws")) return next();
+    res.sendFile(path.join(dist, "index.html"));
+  });
+}
 
 const server = http.createServer(app);
 attachPtyServer(server);

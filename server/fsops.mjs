@@ -5,13 +5,41 @@ import path from "node:path";
 const MAX_FILE = 10 * 1024 * 1024; // 10MB read limit
 const ALWAYS_SKIP = new Set(["node_modules", ".git"]);
 
-/** Resolve an incoming (absolute) path and guarantee it stays in the sandbox. */
-function resolveIn(root, p) {
-  const abs = path.resolve(p && p.length ? p : root);
-  if (abs !== root && !abs.startsWith(root + path.sep)) {
-    throw new Error("Path escapes workspace");
+const rootRealCache = new Map();
+async function rootReal(root) {
+  let r = rootRealCache.get(root);
+  if (!r) {
+    r = await fsp.realpath(root);
+    rootRealCache.set(root, r);
   }
-  return abs;
+  return r;
+}
+
+/** Resolve an incoming (absolute) path to its canonical location and guarantee
+ *  it stays inside the sandbox. This walks up to the nearest existing ancestor
+ *  and realpath()s it, so symlinks (including ones created from the terminal)
+ *  cannot be used to escape the workspace. */
+async function resolveIn(root, p) {
+  const real = await rootReal(root);
+  let cur = path.resolve(p && p.length ? p : root);
+  const tail = [];
+  for (;;) {
+    try {
+      const canon = await fsp.realpath(cur);
+      const full = tail.length ? path.join(canon, ...tail) : canon;
+      if (full !== real && !full.startsWith(real + path.sep)) {
+        throw new Error("Path escapes workspace");
+      }
+      return full;
+    } catch (e) {
+      if (e.message === "Path escapes workspace") throw e;
+      if (e.code !== "ENOENT" && e.code !== "ENOTDIR") throw e;
+      const parent = path.dirname(cur);
+      if (parent === cur) throw new Error("Path escapes workspace");
+      tail.unshift(path.basename(cur));
+      cur = parent;
+    }
+  }
 }
 
 function rel(root, abs) {
@@ -26,7 +54,7 @@ function entryKind(st) {
 }
 
 export async function readDir(root, { path: p, showHidden }) {
-  const dir = resolveIn(root, p);
+  const dir = await resolveIn(root, p);
   const names = await fsp.readdir(dir);
   const out = [];
   for (const name of names) {
@@ -53,7 +81,7 @@ export async function readDir(root, { path: p, showHidden }) {
 }
 
 export async function listSubdirs(root, { path: p, showHidden }) {
-  const dir = resolveIn(root, p);
+  const dir = await resolveIn(root, p);
   const names = await fsp.readdir(dir);
   const out = [];
   for (const name of names) {
@@ -70,7 +98,7 @@ export async function listSubdirs(root, { path: p, showHidden }) {
 }
 
 export async function readFile(root, { path: p }) {
-  const abs = resolveIn(root, p);
+  const abs = await resolveIn(root, p);
   const st = await fsp.stat(abs);
   if (st.size > MAX_FILE) {
     return { kind: "toolarge", size: st.size, limit: MAX_FILE };
@@ -82,38 +110,38 @@ export async function readFile(root, { path: p }) {
 }
 
 export async function writeFile(root, { path: p, content }) {
-  const abs = resolveIn(root, p);
+  const abs = await resolveIn(root, p);
   const tmp = `${abs}.terax-tmp-${process.pid}-${Date.now()}`;
   await fsp.writeFile(tmp, content ?? "", "utf8");
   await fsp.rename(tmp, abs);
 }
 
 export async function createFile(root, { path: p }) {
-  const abs = resolveIn(root, p);
+  const abs = await resolveIn(root, p);
   await fsp.mkdir(path.dirname(abs), { recursive: true });
   await fsp.writeFile(abs, "", { flag: "wx" });
 }
 
 export async function createDir(root, { path: p }) {
-  const abs = resolveIn(root, p);
+  const abs = await resolveIn(root, p);
   await fsp.mkdir(abs, { recursive: true });
 }
 
 export async function rename(root, { from, to }) {
-  const a = resolveIn(root, from);
-  const b = resolveIn(root, to);
+  const a = await resolveIn(root, from);
+  const b = await resolveIn(root, to);
   await fsp.mkdir(path.dirname(b), { recursive: true });
   await fsp.rename(a, b);
 }
 
 export async function remove(root, { path: p }) {
-  const abs = resolveIn(root, p);
+  const abs = await resolveIn(root, p);
   if (abs === root) throw new Error("Refusing to delete workspace root");
   await fsp.rm(abs, { recursive: true, force: true });
 }
 
 export async function stat(root, { path: p }) {
-  const abs = resolveIn(root, p);
+  const abs = await resolveIn(root, p);
   const st = await fsp.lstat(abs);
   return {
     size: st.size,
@@ -150,9 +178,10 @@ export async function search(root, { query, limit, showHidden }) {
   const hits = [];
   let truncated = false;
   if (!q) return { hits, truncated };
-  for await (const e of walk(root, root, { showHidden })) {
+  const start = await resolveIn(root, root);
+  for await (const e of walk(start, start, { showHidden })) {
     if (e.name.toLowerCase().includes(q)) {
-      hits.push({ path: e.abs, rel: rel(root, e.abs), name: e.name, is_dir: e.isDir });
+      hits.push({ path: e.abs, rel: rel(start, e.abs), name: e.name, is_dir: e.isDir });
       if (hits.length >= max) {
         truncated = true;
         break;
@@ -186,9 +215,10 @@ export async function glob(root, { pattern, maxResults, showHidden }) {
   const re = globToRegExp(pattern);
   const hits = [];
   let truncated = false;
-  for await (const e of walk(root, root, { showHidden: showHidden ?? false })) {
+  const start = await resolveIn(root, root);
+  for await (const e of walk(start, start, { showHidden: showHidden ?? false })) {
     if (e.isDir) continue;
-    const r = rel(root, e.abs);
+    const r = rel(start, e.abs);
     if (re.test(r) || re.test(e.name)) {
       hits.push({ path: e.abs, rel: r });
       if (hits.length >= max) {
@@ -201,7 +231,7 @@ export async function glob(root, { pattern, maxResults, showHidden }) {
 }
 
 export async function grep(root, { pattern, root: reqRoot, glob: globs, caseInsensitive, maxResults }) {
-  const base = reqRoot ? resolveIn(root, reqRoot) : root;
+  const base = await resolveIn(root, reqRoot || root);
   const max = maxResults ?? 1000;
   const flags = caseInsensitive ? "i" : "";
   let re;

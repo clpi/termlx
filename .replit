@@ -31,13 +31,22 @@ waitForPort = 5000
 outputType = "webview"
 
 [[ports]]
+localPort = 3001
+externalPort = 3001
+
+[[ports]]
+localPort = 4999
+externalPort = 3002
+
+[[ports]]
 localPort = 5000
 externalPort = 80
 
 [deployment]
-deploymentTarget = "static"
+deploymentTarget = "vm"
 build = ["pnpm", "run", "build"]
 publicDir = "dist"
+run = ["npm", "run", "start"]
 
 [objectStorage]
 defaultBucketID = "replit-objstore-6bc3fd80-7106-4805-a733-a5baf64c836e"

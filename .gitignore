@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 
 *.tsbuildinfo
+# Per-user session data (web backend)
+data/

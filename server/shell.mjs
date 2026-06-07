@@ -61,22 +61,23 @@ export function runCommand(root, { command, cwd, timeoutSecs }) {
 }
 
 // --- cwd-tracking shell sessions (used by AI agent tools) ---
-const sessions = new Map(); // id -> { cwd }
+const sessions = new Map(); // id -> { cwd, sid }
 
-export function sessionOpen(root, { cwd } = {}) {
+export function sessionOpen(root, sid, { cwd } = {}) {
   const id = crypto.randomUUID();
-  sessions.set(id, { cwd: cwd || root });
+  sessions.set(id, { cwd: cwd || root, sid });
   return { id, cwd: cwd || root };
 }
 
-export function sessionClose(_root, { id }) {
-  sessions.delete(id);
+export function sessionClose(_root, sid, { id }) {
+  const sess = sessions.get(id);
+  if (sess && sess.sid === sid) sessions.delete(id);
   return { closed: true };
 }
 
-export function sessionRun(root, { id, command, timeoutSecs }) {
+export function sessionRun(root, sid, { id, command, timeoutSecs }) {
   const sess = sessions.get(id);
-  if (!sess) throw new Error("Unknown shell session");
+  if (!sess || sess.sid !== sid) throw new Error("Unknown shell session");
   const marker = "__TERAX_CWD_" + id.slice(0, 8) + "__";
   const script = `cd ${shq(sess.cwd)} 2>/dev/null; ${command}\n__rc=$?; printf "\\n${marker}:%s\\n" "$(pwd)"; exit $__rc`;
   return runCommand(root, { command: script, cwd: sess.cwd, timeoutSecs }).then((res) => {
@@ -95,15 +96,15 @@ export function sessionRun(root, { id, command, timeoutSecs }) {
 }
 
 // --- background processes ---
-const bg = new Map(); // handle -> { proc, buf, base, dropped, exited, code, command }
+const bg = new Map(); // handle -> { proc, buf, base, dropped, exited, code, command, sid }
 
-export function bgSpawn(root, { command, cwd }) {
+export function bgSpawn(root, sid, { command, cwd }) {
   const handle = crypto.randomUUID();
   const child = spawn("bash", ["-lc", command], {
     cwd: cwd || root,
     env: { ...process.env, HOME: root },
   });
-  const rec = { proc: child, buf: Buffer.alloc(0), base: 0, dropped: 0, exited: false, code: null, command };
+  const rec = { proc: child, buf: Buffer.alloc(0), base: 0, dropped: 0, exited: false, code: null, command, sid };
   const append = (d) => {
     rec.buf = Buffer.concat([rec.buf, d]);
     if (rec.buf.length > BG_BUFFER_CAP) {
@@ -123,9 +124,9 @@ export function bgSpawn(root, { command, cwd }) {
   return { handle, pid: child.pid };
 }
 
-export function bgLogs(_root, { handle, offset }) {
+export function bgLogs(_root, sid, { handle, offset }) {
   const rec = bg.get(handle);
-  if (!rec) throw new Error("Unknown background process");
+  if (!rec || rec.sid !== sid) throw new Error("Unknown background process");
   const total = rec.base + rec.buf.length;
   const since = offset ?? 0;
   const from = Math.max(0, since - rec.base);
@@ -139,9 +140,9 @@ export function bgLogs(_root, { handle, offset }) {
   };
 }
 
-export function bgKill(_root, { handle }) {
+export function bgKill(_root, sid, { handle }) {
   const rec = bg.get(handle);
-  if (!rec) throw new Error("Unknown background process");
+  if (!rec || rec.sid !== sid) throw new Error("Unknown background process");
   try {
     rec.proc.kill("SIGKILL");
   } catch {
@@ -150,8 +151,10 @@ export function bgKill(_root, { handle }) {
   return { killed: true };
 }
 
-export function bgList() {
-  return [...bg.entries()].map(([handle, rec]) => ({
+export function bgList(_root, sid) {
+  return [...bg.entries()]
+    .filter(([, rec]) => rec.sid === sid)
+    .map(([handle, rec]) => ({
     handle,
     command: rec.command,
     exited: rec.exited,
