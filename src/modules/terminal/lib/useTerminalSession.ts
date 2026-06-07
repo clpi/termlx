@@ -1,4 +1,4 @@
-import { detectMonoFontFamily } from "@/lib/fonts";
+import { resolveTerminalFontFamily } from "@/lib/fonts";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { buildTerminalTheme } from "@/styles/terminalTheme";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -63,9 +63,9 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
   const fontSize = prefs.terminalFontSize;
 
   const term = new Terminal({
-    fontFamily: detectMonoFontFamily(),
+    fontFamily: resolveTerminalFontFamily(prefs.terminalFontFamily),
     fontSize,
-    theme: buildTerminalTheme(),
+    theme: buildTerminalTheme(prefs.terminalTheme),
     cursorBlink: true,
     cursorStyle: "bar",
     cursorInactiveStyle: "outline",
@@ -422,6 +422,23 @@ export function useTerminalSession({
     s.fitAddon.fit();
   }, [leafId, fontSize]);
 
+  const fontFamily = usePreferencesStore((p) => p.terminalFontFamily);
+  useEffect(() => {
+    const s = sessions.get(leafId);
+    if (!s) return;
+    const resolved = resolveTerminalFontFamily(fontFamily);
+    if (s.term.options.fontFamily === resolved) return;
+    s.term.options.fontFamily = resolved;
+    s.fitAddon.fit();
+  }, [leafId, fontFamily]);
+
+  const terminalTheme = usePreferencesStore((p) => p.terminalTheme);
+  useEffect(() => {
+    const s = sessions.get(leafId);
+    if (!s) return;
+    s.term.options.theme = buildTerminalTheme(terminalTheme);
+  }, [leafId, terminalTheme]);
+
   const webglPref = usePreferencesStore((p) => p.terminalWebglEnabled);
   useEffect(() => {
     const s = sessions.get(leafId);
@@ -488,7 +505,9 @@ export function useTerminalSession({
   const applyTheme = useCallback(() => {
     const s = sessions.get(leafId);
     if (!s) return;
-    s.term.options.theme = buildTerminalTheme();
+    s.term.options.theme = buildTerminalTheme(
+      usePreferencesStore.getState().terminalTheme,
+    );
   }, [leafId]);
 
   return useMemo(

@@ -13,6 +13,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { TERMINAL_FONTS, type TerminalFontId } from "@/lib/fonts";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import type { ThemePref } from "@/modules/settings/store";
 import {
@@ -23,11 +24,17 @@ import {
   setEditorTheme,
   setRestoreWindowState,
   setShowHidden,
+  setTerminalFontFamily,
   setTerminalFontSize,
+  setTerminalTheme,
   setTerminalWebglEnabled,
   setVimMode,
   type EditorThemeId,
 } from "@/modules/settings/store";
+import {
+  TERMINAL_THEMES,
+  type TerminalThemeId,
+} from "@/styles/terminalTheme";
 import { useTheme } from "@/modules/theme";
 import {
   ArrowDown01Icon,
@@ -62,6 +69,8 @@ export function GeneralSection() {
     (s) => s.terminalWebglEnabled,
   );
   const terminalFontSize = usePreferencesStore((s) => s.terminalFontSize);
+  const terminalTheme = usePreferencesStore((s) => s.terminalTheme);
+  const terminalFontFamily = usePreferencesStore((s) => s.terminalFontFamily);
 
   // Reconcile autostart pref with the actual OS state on mount — the user may
   // have toggled it from System Settings.
@@ -99,6 +108,22 @@ export function GeneralSection() {
   };
 
   const onPickTerminalFontSize = (size: number) => void setTerminalFontSize(size);
+
+  const onPickTerminalTheme = (id: TerminalThemeId) =>
+    void setTerminalTheme(id).catch((e) =>
+      console.error("terminal theme update failed", e),
+    );
+
+  const onPickTerminalFont = (id: TerminalFontId) =>
+    void setTerminalFontFamily(id).catch((e) =>
+      console.error("terminal font update failed", e),
+    );
+
+  const terminalThemeLabel =
+    TERMINAL_THEMES.find((t) => t.id === terminalTheme)?.label ?? terminalTheme;
+  const terminalFontLabel =
+    TERMINAL_FONTS.find((f) => f.id === terminalFontFamily)?.label ??
+    terminalFontFamily;
 
   return (
     <div className="flex flex-col gap-6">
@@ -214,6 +239,82 @@ export function GeneralSection() {
             checked={terminalWebglEnabled}
             onCheckedChange={onToggleTerminalWebgl}
           />
+        </SettingRow>
+        <SettingRow
+          title="Color theme"
+          description="Terminal color scheme. “Terax (App)” follows the app theme."
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-8 min-w-[150px] justify-between gap-2 rounded-none px-2.5 text-[12px]"
+              >
+                <span>{terminalThemeLabel}</span>
+                <HugeiconsIcon
+                  icon={ArrowDown01Icon}
+                  size={12}
+                  strokeWidth={2}
+                  className="opacity-70"
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="max-h-[280px] min-w-[170px] overflow-y-auto rounded-none border border-border bg-popover p-0 shadow-none ring-0"
+            >
+              {TERMINAL_THEMES.map((t) => (
+                <DropdownMenuItem
+                  key={t.id}
+                  onSelect={() => onPickTerminalTheme(t.id)}
+                  className={cn(
+                    "rounded-none px-3 py-1.5 text-[12px]",
+                    t.id === terminalTheme && "bg-accent/50",
+                  )}
+                >
+                  {t.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SettingRow>
+        <SettingRow
+          title="Font family"
+          description="Monospace font used in the terminal."
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-8 min-w-[150px] justify-between gap-2 rounded-none px-2.5 text-[12px]"
+              >
+                <span>{terminalFontLabel}</span>
+                <HugeiconsIcon
+                  icon={ArrowDown01Icon}
+                  size={12}
+                  strokeWidth={2}
+                  className="opacity-70"
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="max-h-[280px] min-w-[170px] overflow-y-auto rounded-none border border-border bg-popover p-0 shadow-none ring-0"
+            >
+              {TERMINAL_FONTS.map((f) => (
+                <DropdownMenuItem
+                  key={f.id}
+                  onSelect={() => onPickTerminalFont(f.id)}
+                  className={cn(
+                    "rounded-none px-3 py-1.5 text-[12px]",
+                    f.id === terminalFontFamily && "bg-accent/50",
+                  )}
+                >
+                  {f.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </SettingRow>
         <SettingRow
           title="Font size"

@@ -133,3 +133,21 @@ opened via `useAuth().signIn`.
   `TERAX_USER_NAME` (the display name) for logged-in sessions; `games/lib/ui.mjs`
   auto-saves under it (no initials prompt), guests still type 3-letter initials.
   `scores.mjs` now keeps sanitized names up to 16 chars (dropped the 3-char-uppercase rule).
+
+## Terminal preferences (color themes + font family)
+Terminal appearance is driven entirely by the prefs store, not hardcoded. Two
+prefs: `terminalTheme` (named color scheme) and `terminalFontFamily`. The
+`"default"` theme is special — `buildTerminalTheme(themeId)` reads live globals.css
+app tokens for it (so it follows the app light/dark theme), but returns a FIXED
+self-contained palette for every other named scheme. Likewise `terminalFontFamily`
+`"auto"` defers to `detectMonoFontFamily()` Nerd-Font detection; other ids map to
+fixed CSS font stacks via `resolveTerminalFontFamily(id)`.
+- **Adding a new pref requires touching ~6 spots in `store.ts`**: Preferences type,
+  a `KEY_*` const, DEFAULT_PREFERENCES, the loadPreferences `get<>()` line, a
+  `set<Name>()` writer (via `writePref`), and the `onPreferencesChange` key→prefKey
+  map. Miss the last one and cross-window settings changes silently won't propagate.
+- **Apply pref changes to ALL live xterm sessions** by mirroring the existing
+  fontSize effect in `useTerminalSession.ts` (one effect per pref, keyed on leafId):
+  set `term.options.theme`/`term.options.fontFamily` then `fitAddon.fit()` on font
+  change. The `applyTheme()` callback (called on app theme switch) must re-read the
+  current `terminalTheme` pref so the "default" scheme tracks light/dark.

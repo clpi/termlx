@@ -9,6 +9,14 @@ import {
   type ModelId,
 } from "@/modules/ai/config";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
+import {
+  DEFAULT_TERMINAL_THEME,
+  type TerminalThemeId,
+} from "@/styles/terminalTheme";
+import {
+  DEFAULT_TERMINAL_FONT,
+  type TerminalFontId,
+} from "@/lib/fonts";
 
 export type ThemePref = "system" | "light" | "dark";
 
@@ -58,6 +66,8 @@ export type Preferences = {
   showHidden: boolean;
   terminalWebglEnabled: boolean;
   terminalFontSize: number;
+  terminalTheme: TerminalThemeId;
+  terminalFontFamily: TerminalFontId;
   lastWslDistro: string | null;
   shortcuts: Record<ShortcutId, KeyBinding[]>;
 };
@@ -83,6 +93,8 @@ const KEY_SHOW_HIDDEN = "showHidden";
 const LEGACY_KEY_SHOW_HIDDEN_DIRS = "showHiddenDirectories";
 const KEY_TERMINAL_WEBGL_ENABLED = "terminalWebglEnabled";
 const KEY_TERMINAL_FONT_SIZE = "terminalFontSize";
+const KEY_TERMINAL_THEME = "terminalTheme";
+const KEY_TERMINAL_FONT_FAMILY = "terminalFontFamily";
 const KEY_LAST_WSL_DISTRO = "lastWslDistro";
 const KEY_SHORTCUTS = "shortcuts";
 
@@ -114,6 +126,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   showHidden: false,
   terminalWebglEnabled: true,
   terminalFontSize: TERMINAL_FONT_SIZE_DEFAULT,
+  terminalTheme: DEFAULT_TERMINAL_THEME,
+  terminalFontFamily: DEFAULT_TERMINAL_FONT,
   lastWslDistro: null,
   shortcuts: {} as Record<ShortcutId, KeyBinding[]>,
 };
@@ -186,6 +200,12 @@ export async function loadPreferences(): Promise<Preferences> {
     terminalFontSize:
       get<number>(KEY_TERMINAL_FONT_SIZE) ??
       DEFAULT_PREFERENCES.terminalFontSize,
+    terminalTheme:
+      get<TerminalThemeId>(KEY_TERMINAL_THEME) ??
+      DEFAULT_PREFERENCES.terminalTheme,
+    terminalFontFamily:
+      get<TerminalFontId>(KEY_TERMINAL_FONT_FAMILY) ??
+      DEFAULT_PREFERENCES.terminalFontFamily,
     lastWslDistro:
       get<string | null>(KEY_LAST_WSL_DISTRO) ??
       DEFAULT_PREFERENCES.lastWslDistro,
@@ -279,6 +299,16 @@ export async function setTerminalFontSize(value: number): Promise<void> {
   await writePref(KEY_TERMINAL_FONT_SIZE, clamped);
 }
 
+export async function setTerminalTheme(value: TerminalThemeId): Promise<void> {
+  await writePref(KEY_TERMINAL_THEME, value);
+}
+
+export async function setTerminalFontFamily(
+  value: TerminalFontId,
+): Promise<void> {
+  await writePref(KEY_TERMINAL_FONT_FAMILY, value);
+}
+
 export async function setLastWslDistro(value: string | null): Promise<void> {
   await writePref(KEY_LAST_WSL_DISTRO, value);
 }
@@ -321,6 +351,8 @@ export async function onPreferencesChange(
     [KEY_SHOW_HIDDEN]: "showHidden",
     [KEY_TERMINAL_WEBGL_ENABLED]: "terminalWebglEnabled",
     [KEY_TERMINAL_FONT_SIZE]: "terminalFontSize",
+    [KEY_TERMINAL_THEME]: "terminalTheme",
+    [KEY_TERMINAL_FONT_FAMILY]: "terminalFontFamily",
     [KEY_LAST_WSL_DISTRO]: "lastWslDistro",
     [KEY_SHORTCUTS]: "shortcuts",
   };
