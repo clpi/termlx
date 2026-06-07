@@ -3,10 +3,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { WindowControls } from "@/components/WindowControls";
 import { useAuth } from "@/auth/AuthGate";
+import { Avatar } from "@/modules/profile/Avatar";
+import { ProfileDialog } from "@/modules/profile/ProfileDialog";
 import { IS_MAC, KEY_SEP, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
@@ -21,9 +24,11 @@ import {
   KeyboardIcon,
   LayoutTwoColumnIcon,
   LayoutTwoRowIcon,
+  Login03Icon,
   Logout01Icon,
   Settings01Icon,
   SidebarLeftIcon,
+  UserIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
@@ -77,7 +82,8 @@ export function Header({
   const rootRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
   const userShortcuts = usePreferencesStore((s) => s.shortcuts);
-  const { email, signOut } = useAuth();
+  const { email, profile, signIn, signOut } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const tokensFor = (id: ShortcutId): string => {
     const s = SHORTCUTS.find((s) => s.id === id);
@@ -131,15 +137,57 @@ export function Header({
     </Button>
   );
 
-  const signOutButton = (
+  const userMenu = email ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 rounded-md p-0 text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Account"
+        >
+          {profile ? (
+            <Avatar profile={profile} size={22} />
+          ) : (
+            <HugeiconsIcon icon={UserIcon} size={16} strokeWidth={1.75} />
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-48">
+        {profile && (
+          <>
+            <div className="flex items-center gap-2 px-2 py-1.5">
+              <Avatar profile={profile} size={28} />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">
+                  {profile.displayName}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">{email}</p>
+              </div>
+            </div>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        <DropdownMenuItem onSelect={() => setProfileOpen(true)}>
+          <HugeiconsIcon icon={UserIcon} size={14} strokeWidth={1.75} />
+          <span className="flex-1">Profile</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void signOut()}>
+          <HugeiconsIcon icon={Logout01Icon} size={14} strokeWidth={1.75} />
+          <span className="flex-1">Sign out</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : (
     <Button
       variant="ghost"
-      size="icon"
-      className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-      onClick={() => void signOut()}
-      title={`Sign out (${email})`}
+      size="sm"
+      className="h-7 shrink-0 gap-1.5 rounded-md px-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+      onClick={signIn}
+      title="Sign in"
     >
-      <HugeiconsIcon icon={Logout01Icon} size={15} strokeWidth={1.75} />
+      <HugeiconsIcon icon={Login03Icon} size={15} strokeWidth={1.75} />
+      <span className="text-xs">Sign in</span>
     </Button>
   );
 
@@ -236,14 +284,14 @@ export function Header({
         <>
           {shortcutsButton}
           {settingsButton}
-          {signOutButton}
+          {userMenu}
         </>
       )}
 
       {!IS_MAC && (
         <>
           {settingsButton}
-          {signOutButton}
+          {userMenu}
         </>
       )}
 
@@ -253,6 +301,8 @@ export function Header({
           <WindowControls />
         </>
       )}
+
+      <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
     </div>
   );
 }

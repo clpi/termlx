@@ -46,18 +46,72 @@ app.post("/api/auth/logout", (req, res) => {
 });
 app.get("/api/auth/me", (req, res) => {
   const email = auth.userFromToken(req.cookies?.[auth.AUTH_COOKIE]);
-  if (!email) {
-    res.status(401).json({ ok: false });
-    return;
-  }
-  res.json({ ok: true, email });
+  res.json({
+    ok: true,
+    email: email || null,
+    requireAuth: auth.REQUIRE_AUTH,
+    profile: email ? auth.getProfile(email) : null,
+  });
 });
 
-// Everything below requires a valid login.
+// Login is optional: guests pass through (req.userEmail = null) unless
+// TERAX_REQUIRE_AUTH is set. authGate sets req.userEmail for downstream routes.
 app.use("/api", auth.authGate);
 
 app.get("/api/session", (req, res) => {
   res.json({ home: req.session.workspace, platform: "linux", name: "Terax" });
+});
+
+// --- user profiles -------------------------------------------------------
+function requireUser(req, res) {
+  if (!req.userEmail) {
+    res.status(401).json({ ok: false, error: "Sign in to manage your profile" });
+    return null;
+  }
+  return req.userEmail;
+}
+
+app.get("/api/profile/me", (req, res) => {
+  res.json({ ok: true, profile: req.userEmail ? auth.getProfile(req.userEmail) : null });
+});
+app.put("/api/profile", (req, res) => {
+  const email = requireUser(req, res);
+  if (!email) return;
+  try {
+    res.json({ ok: true, profile: auth.updateProfile(email, req.body || {}) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message ?? e) });
+  }
+});
+app.post("/api/profile/avatar", (req, res) => {
+  const email = requireUser(req, res);
+  if (!email) return;
+  try {
+    res.json({ ok: true, profile: auth.setAvatar(email, req.body?.dataUrl) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message ?? e) });
+  }
+});
+app.delete("/api/profile/avatar", (req, res) => {
+  const email = requireUser(req, res);
+  if (!email) return;
+  try {
+    res.json({ ok: true, profile: auth.clearAvatar(email) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message ?? e) });
+  }
+});
+app.get("/api/users", (req, res) => {
+  res.json({ ok: true, users: auth.listProfiles() });
+});
+app.get("/api/profile/avatar/:id", (req, res) => {
+  const f = auth.avatarFile(req.params.id);
+  if (!f) {
+    res.status(404).end();
+    return;
+  }
+  res.type(f.ext === "jpg" ? "image/jpeg" : `image/${f.ext}`);
+  res.sendFile(f.path);
 });
 
 // --- store endpoints (back the LazyStore shim) ---

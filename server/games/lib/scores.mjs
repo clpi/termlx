@@ -31,8 +31,14 @@ export function qualifies(game, score, n = 10) {
 export function add(game, name, score) {
   const all = load();
   const list = all[game] || [];
+  // Accept full profile display names (logged-in users) as well as classic
+  // 3-letter initials (guests). Strip control chars and cap the length.
+  const clean = String(name || "")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .trim()
+    .slice(0, 16);
   const entry = {
-    name: (name || "???").slice(0, 3).toUpperCase().padEnd(3, "?"),
+    name: clean || "???",
     score,
     date: new Date().toISOString().slice(0, 10),
   };

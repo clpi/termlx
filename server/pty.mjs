@@ -3,7 +3,11 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import * as pty from "node-pty";
 import { sidFromCookieHeader, ensureSessionDirs } from "./session.mjs";
-import { userFromCookieHeader } from "./auth.mjs";
+import {
+  userFromCookieHeader,
+  displayNameForEmail,
+  REQUIRE_AUTH,
+} from "./auth.mjs";
 
 const RCFILE = fileURLToPath(new URL("./shell-integration.bash", import.meta.url));
 const GAMES_DIR = fileURLToPath(new URL("./games", import.meta.url));
@@ -49,11 +53,14 @@ export function attachPtyServer(httpServer) {
       ws.close();
       return;
     }
-    if (!userFromCookieHeader(req.headers.cookie)) {
+    // Login is optional: guests get a terminal too, unless TERAX_REQUIRE_AUTH.
+    const email = userFromCookieHeader(req.headers.cookie);
+    if (!email && REQUIRE_AUTH) {
       ws.send(JSON.stringify({ type: "error", message: "Not authenticated" }));
       ws.close();
       return;
     }
+    const userName = email ? displayNameForEmail(email) : null;
     const { workspace, storesDir } = ensureSessionDirs(sid);
     ws.binaryType = "arraybuffer";
     let term = null;
@@ -96,6 +103,9 @@ export function attachPtyServer(httpServer) {
             // Terminal tools: text editor + web browser.
             TERAX_TOOLS_DIR: TOOLS_DIR,
             TERAX_NODE: process.execPath,
+            // Logged-in user's display name (games label scores with it;
+            // unset for guests, who are prompted for initials instead).
+            ...(userName ? { TERAX_USER_NAME: userName } : {}),
           },
         });
         term.onData((data) => {

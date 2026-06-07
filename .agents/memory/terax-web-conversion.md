@@ -110,3 +110,26 @@ Node ESM TUIs in `server/tools/`, launched from bash via aliases (guarded by
   0..0x10FFFF + try/catch) or a malformed `&#…;` throws and aborts the whole page.
 - Editor keeps real tabs in the buffer (so Makefiles survive) but expands them for
   display and does tab-aware cursor/scroll math (`dispCol`/`expandTabs`, TABW=8).
+
+## Optional auth + user profiles
+Login is OPTIONAL by default — guests use the shared app freely. `authGate`
+(server/auth.mjs) only 401s when `REQUIRE_AUTH` (env `TERAX_REQUIRE_AUTH=1/true`)
+is set; otherwise it sets `req.userEmail=null` and passes through. `pty.mjs` WS and
+all `/api/*` routes follow the same flag. `/api/auth/me` always 200s with
+`{email|null, requireAuth, profile}`. Frontend `AuthGate` only blocks full-screen
+when `requireAuth && !email`; otherwise the login screen is a dismissible modal
+opened via `useAuth().signIn`.
+- **`useAuth()` email is `string | null`** now (was always-string). Any consumer
+  must handle the guest/null case (Header shows a "Sign in" button vs an avatar menu).
+- **Profiles live on the auth user record** (server/auth.mjs): `id` (stable random,
+  used for public refs + avatar URLs), `displayName`, `bio`, `avatarColor`,
+  `avatarExt`/`avatarUpdatedAt`. `migrateProfiles()` backfills these (incl. ids) for
+  pre-existing accounts at module load — don't generate ids per-read or avatar URLs churn.
+- **Avatars are files**, not data URLs in JSON: stored under `data/auth/avatars/<id>.<ext>`,
+  uploaded as a base64 data URL (validated to png/jpeg/webp/gif, ≤2MB), served at
+  `/api/profile/avatar/:id` (cache-busted with `?v=avatarUpdatedAt`). Public profiles
+  never expose email; the `/api/users` directory returns display name/bio/avatar only.
+- **Games leaderboard names come from the profile**: `pty.mjs` injects
+  `TERAX_USER_NAME` (the display name) for logged-in sessions; `games/lib/ui.mjs`
+  auto-saves under it (no initials prompt), guests still type 3-letter initials.
+  `scores.mjs` now keeps sanitized names up to 16 chars (dropped the 3-char-uppercase rule).
