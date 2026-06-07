@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Syne:wght@400..800&display=swap');
+
+:root {
+  --terax-bg: 5 5% 4%;
+  --terax-surface: 10 5% 10%;
+  --terax-surface-hover: 15 5% 15%;
+  --terax-border: 0 0% 18%;
+  --terax-accent: 188 100% 50%; /* Cyan */
+  --terax-accent-muted: 188 100% 50% / 0.15;
+  --terax-muted: 0 0% 60%;
+  --terax-text: 0 0% 98%;
+  --terax-error: 330 100% 50%;
+  --terax-success: 150 100% 50%;
+  --terax-warning: 40 100% 50%;
+}
+
+.terax-theme {
+  --background: var(--terax-bg);
+  --foreground: var(--terax-text);
+  --card: var(--terax-surface);
+  --card-foreground: var(--terax-text);
+  --popover: var(--terax-surface);
+  --popover-foreground: var(--terax-text);
+  --primary: var(--terax-accent);
+  --primary-foreground: var(--terax-bg);
+  --secondary: var(--terax-surface-hover);
+  --secondary-foreground: var(--terax-text);
+  --muted: var(--terax-surface-hover);
+  --muted-foreground: var(--terax-muted);
+  --accent: var(--terax-surface-hover);
+  --accent-foreground: var(--terax-text);
+  --destructive: var(--terax-error);
+  --destructive-foreground: var(--terax-text);
+  --border: var(--terax-border);
+  --input: var(--terax-border);
+  --ring: var(--terax-accent);
+  --radius: 0;
+
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Syne', sans-serif;
+}
+
+.terax-theme .font-mono {
+  font-family: 'Space Mono', monospace;
+}
+
+/* Animations */
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes terminal-scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+.terax-scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, transparent, hsl(var(--terax-accent)), transparent);
+  opacity: 0.2;
+  animation: scanline 4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes scanline {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}

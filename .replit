@@ -43,6 +43,10 @@ externalPort = 3002
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 23636
+externalPort = 5173
+
 [deployment]
 deploymentTarget = "vm"
 build = ["pnpm", "run", "build"]
@@ -50,4 +54,4 @@ publicDir = "dist"
 run = ["npm", "run", "start"]
 
 [objectStorage]
-defaultBucketID = "replit-objstore-6bc3fd80-7106-4805-a733-a5baf64c836e"
+defaultBucketID = "replit-objstore-cb1c1568-cbac-4e43-8005-d74b9ef6ccbe"
