@@ -36,6 +36,8 @@ import {
   type EditorPaneHandle,
 } from "@/modules/editor";
 import { FileExplorer } from "@/modules/explorer";
+import { useIsMobile } from "@/lib/use-mobile";
+import { MobileKeyBar } from "@/modules/terminal/MobileKeyBar";
 import {
   Header,
   type SearchInlineHandle,
@@ -120,12 +122,22 @@ export default function App() {
   const [activeEditorHandle, setActiveEditorHandle] =
     useState<EditorPaneHandle | null>(null);
   const sidebarRef = useRef<PanelImperativeHandle | null>(null);
+  const isMobile = useIsMobile();
+  // On phones the explorer is an overlay drawer rather than a resizable panel.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  useEffect(() => {
+    if (!isMobile) setDrawerOpen(false);
+  }, [isMobile]);
   const toggleSidebar = useCallback(() => {
+    if (isMobile) {
+      setDrawerOpen((v) => !v);
+      return;
+    }
     const p = sidebarRef.current;
     if (!p) return;
     if (p.getSize().asPercentage <= 0) p.expand();
     else p.collapse();
-  }, []);
+  }, [isMobile]);
 
   const [home, setHome] = useState<string | null>(null);
   const [pendingCloseTab, setPendingCloseTab] = useState<number | null>(null);
@@ -381,6 +393,7 @@ export default function App() {
       window.dispatchEvent(
         new CustomEvent<string>("terax:ai-attach-file", { detail: path }),
       );
+      setDrawerOpen(false);
       openPanel();
       focusInput(null);
     },
@@ -477,6 +490,7 @@ export default function App() {
 
   const cdInNewTab = useCallback(
     (path: string) => {
+      setDrawerOpen(false);
       const tabId = newTab(path);
       setTimeout(() => {
         const tab = tabsRef.current.find((x) => x.id === tabId);
@@ -498,8 +512,31 @@ export default function App() {
       // Explorer defaults to preview (pin=false); explicit actions like
       // context-menu "Open" pass pin=true for a persistent tab.
       openFileTab(path, pin ?? false);
+      setDrawerOpen(false);
     },
     [openFileTab],
+  );
+
+  const sendToActiveTerminal = useCallback(
+    (seq: string) => {
+      if (activeLeafId === null) return;
+      const term = terminalRefs.current.get(activeLeafId);
+      if (!term) return;
+      term.write(seq);
+      term.focus();
+    },
+    [activeLeafId],
+  );
+
+  const armModifierOnActive = useCallback(
+    (mod: "ctrl" | "alt" | null) => {
+      if (activeLeafId === null) return;
+      const term = terminalRefs.current.get(activeLeafId);
+      if (!term) return;
+      term.armModifier(mod);
+      term.focus();
+    },
+    [activeLeafId],
   );
 
   const handlePathRenamed = useCallback(
@@ -551,11 +588,13 @@ export default function App() {
 
   const splitActivePaneInActiveTab = useCallback(
     (dir: "row" | "col") => {
+      // Phones get a single full-width pane — no side-by-side splits.
+      if (isMobile) return;
       const t = tabsRef.current.find((x) => x.id === activeId);
       if (!t || t.kind !== "terminal") return;
       splitActivePane(activeId, dir);
     },
-    [activeId, splitActivePane],
+    [activeId, splitActivePane, isMobile],
   );
 
   const handleCloseTabOrPane = useCallback(() => {
@@ -734,6 +773,106 @@ export default function App() {
     });
   }, [setLive, activeId, tabs, explorerRoot, home, openPreviewTab]);
 
+  const explorer = (
+    <FileExplorer
+      rootPath={explorerRoot}
+      onOpenFile={handleOpenFile}
+      onPathRenamed={handlePathRenamed}
+      onPathDeleted={handlePathDeleted}
+      onRevealInTerminal={cdInNewTab}
+      onAttachToAgent={handleAttachFileToAgent}
+    />
+  );
+
+  const workspaceInner = (
+    <>
+      <div className="relative min-h-0 flex-1">
+        <div
+          className={cn(
+            "absolute inset-0 px-3 pt-2 pb-2",
+            !isTerminalTab && "invisible pointer-events-none",
+          )}
+          aria-hidden={!isTerminalTab}
+        >
+          <TerminalStack
+            tabs={tabs}
+            activeId={activeId}
+            registerHandle={registerTerminalHandle}
+            onSearchReady={handleSearchReady}
+            onCwd={handleTerminalCwd}
+            onExit={handleLeafExit}
+            onFocusLeaf={handleFocusLeaf}
+          />
+        </div>
+        <div
+          className={cn(
+            "absolute inset-0 px-3 pt-2 pb-2",
+            !isEditorTab && "invisible pointer-events-none",
+          )}
+          aria-hidden={!isEditorTab}
+        >
+          <EditorStack
+            tabs={tabs}
+            activeId={activeId}
+            registerHandle={registerEditorHandle}
+            onDirtyChange={handleEditorDirty}
+            onCloseTab={disposeTab}
+          />
+        </div>
+        <div
+          className={cn(
+            "absolute inset-0 px-3 pt-2 pb-2",
+            !isPreviewTab && "invisible pointer-events-none",
+          )}
+          aria-hidden={!isPreviewTab}
+        >
+          <PreviewStack
+            tabs={tabs}
+            activeId={activeId}
+            registerHandle={registerPreviewHandle}
+            onUrlChange={handlePreviewUrl}
+          />
+        </div>
+        <div
+          className={cn(
+            "absolute inset-0 px-3 pt-2 pb-2",
+            !isAiDiffTab && "invisible pointer-events-none",
+          )}
+          aria-hidden={!isAiDiffTab}
+        >
+          <AiDiffStack
+            tabs={tabs}
+            activeId={activeId}
+            onAccept={(id) => respondToApproval(id, true)}
+            onReject={(id) => respondToApproval(id, false)}
+          />
+        </div>
+      </div>
+
+      {keysLoaded ? (
+        <motion.div
+          data-ai-input-bar
+          initial={false}
+          animate={{
+            height: panelOpen ? "auto" : 0,
+            opacity: panelOpen ? 1 : 0,
+          }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className="overflow-hidden"
+          aria-hidden={!panelOpen}
+        >
+          {hasComposer ? (
+            <AiInputBar />
+          ) : (
+            <AiInputBarConnect
+              onAdd={() => void openSettingsWindow("models")}
+            />
+          )}
+        </motion.div>
+      ) : null}
+    </>
+  );
+
   const shell = (
     <ThemeProvider>
       <TooltipProvider>
@@ -751,6 +890,7 @@ export default function App() {
             onToggleSidebar={toggleSidebar}
             onSplit={splitActivePaneInActiveTab}
             canSplit={
+              !isMobile &&
               activeTerminalTab !== null &&
               leafIds(activeTerminalTab.paneTree).length < MAX_PANES_PER_TAB
             }
@@ -758,124 +898,75 @@ export default function App() {
             onOpenSettings={() => void openSettingsWindow()}
             searchTarget={searchTarget}
             searchRef={searchInlineRef}
+            isMobile={isMobile}
           />
 
-          <main className="flex min-h-0 flex-1 flex-col">
-            <ResizablePanelGroup
-              orientation="horizontal"
-              className="min-h-0 flex-1"
-            >
-              <ResizablePanel
-                id="sidebar"
-                panelRef={sidebarRef}
-                defaultSize="225px"
-                minSize="130px"
-                maxSize="450px"
-                collapsible
-                collapsedSize={0}
-              >
-                <div className="h-full border-r border-border/60 bg-card">
-                  <FileExplorer
-                    rootPath={explorerRoot}
-                    onOpenFile={handleOpenFile}
-                    onPathRenamed={handlePathRenamed}
-                    onPathDeleted={handlePathDeleted}
-                    onRevealInTerminal={cdInNewTab}
-                    onAttachToAgent={handleAttachFileToAgent}
-                  />
-                </div>
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel id="workspace" defaultSize="78%" minSize="30%">
+          <main className="relative flex min-h-0 flex-1 flex-col">
+            {isMobile ? (
+              <div className="relative h-full min-h-0">
                 <div className="flex h-full min-h-0 flex-col">
-                  <div className="relative min-h-0 flex-1">
-                    <div
-                      className={cn(
-                        "absolute inset-0 px-3 pt-2 pb-2",
-                        !isTerminalTab && "invisible pointer-events-none",
-                      )}
-                      aria-hidden={!isTerminalTab}
-                    >
-                      <TerminalStack
-                        tabs={tabs}
-                        activeId={activeId}
-                        registerHandle={registerTerminalHandle}
-                        onSearchReady={handleSearchReady}
-                        onCwd={handleTerminalCwd}
-                        onExit={handleLeafExit}
-                        onFocusLeaf={handleFocusLeaf}
-                      />
-                    </div>
-                    <div
-                      className={cn(
-                        "absolute inset-0 px-3 pt-2 pb-2",
-                        !isEditorTab && "invisible pointer-events-none",
-                      )}
-                      aria-hidden={!isEditorTab}
-                    >
-                      <EditorStack
-                        tabs={tabs}
-                        activeId={activeId}
-                        registerHandle={registerEditorHandle}
-                        onDirtyChange={handleEditorDirty}
-                        onCloseTab={disposeTab}
-                      />
-                    </div>
-                    <div
-                      className={cn(
-                        "absolute inset-0 px-3 pt-2 pb-2",
-                        !isPreviewTab && "invisible pointer-events-none",
-                      )}
-                      aria-hidden={!isPreviewTab}
-                    >
-                      <PreviewStack
-                        tabs={tabs}
-                        activeId={activeId}
-                        registerHandle={registerPreviewHandle}
-                        onUrlChange={handlePreviewUrl}
-                      />
-                    </div>
-                    <div
-                      className={cn(
-                        "absolute inset-0 px-3 pt-2 pb-2",
-                        !isAiDiffTab && "invisible pointer-events-none",
-                      )}
-                      aria-hidden={!isAiDiffTab}
-                    >
-                      <AiDiffStack
-                        tabs={tabs}
-                        activeId={activeId}
-                        onAccept={(id) => respondToApproval(id, true)}
-                        onReject={(id) => respondToApproval(id, false)}
-                      />
-                    </div>
-                  </div>
-
-                  {keysLoaded ? (
-                    <motion.div
-                      data-ai-input-bar
-                      initial={false}
-                      animate={{
-                        height: panelOpen ? "auto" : 0,
-                        opacity: panelOpen ? 1 : 0,
-                      }}
-                      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden"
-                      aria-hidden={!panelOpen}
-                    >
-                      {hasComposer ? (
-                        <AiInputBar />
-                      ) : (
-                        <AiInputBarConnect
-                          onAdd={() => void openSettingsWindow("models")}
-                        />
-                      )}
-                    </motion.div>
-                  ) : null}
+                  {workspaceInner}
                 </div>
-              </ResizablePanel>
-            </ResizablePanelGroup>
+                <AnimatePresence>
+                  {drawerOpen ? (
+                    <>
+                      <motion.div
+                        key="drawer-backdrop"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="absolute inset-0 z-30 bg-black/40"
+                        onClick={() => setDrawerOpen(false)}
+                      />
+                      <motion.aside
+                        key="drawer-panel"
+                        initial={{ x: "-100%" }}
+                        animate={{ x: 0 }}
+                        exit={{ x: "-100%" }}
+                        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                        className="absolute inset-y-0 left-0 z-40 w-[min(80%,320px)] border-r border-border/60 bg-card shadow-xl"
+                      >
+                        {explorer}
+                      </motion.aside>
+                    </>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <ResizablePanelGroup
+                orientation="horizontal"
+                className="min-h-0 flex-1"
+              >
+                <ResizablePanel
+                  id="sidebar"
+                  panelRef={sidebarRef}
+                  defaultSize="225px"
+                  minSize="130px"
+                  maxSize="450px"
+                  collapsible
+                  collapsedSize={0}
+                >
+                  <div className="h-full border-r border-border/60 bg-card">
+                    {explorer}
+                  </div>
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel id="workspace" defaultSize="78%" minSize="30%">
+                  <div className="flex h-full min-h-0 flex-col">
+                    {workspaceInner}
+                  </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            )}
           </main>
+
+          {isMobile && isTerminalTab ? (
+            <MobileKeyBar
+              onKey={sendToActiveTerminal}
+              onArmModifier={armModifierOnActive}
+            />
+          ) : null}
 
           <StatusBar
             cwd={activeCwd}
@@ -888,6 +979,7 @@ export default function App() {
             privateActive={
               activeTab?.kind === "terminal" && activeTab.private === true
             }
+            compact={isMobile}
           />
 
           {hasComposer ? (

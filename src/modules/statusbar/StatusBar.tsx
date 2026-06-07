@@ -25,6 +25,8 @@ type Props = {
   /** Only rendered when the AI panel is open and a key is loaded. */
   hasComposer: boolean;
   privateActive: boolean;
+  /** Phone/small-tablet: drop the workspace selector + cwd breadcrumb. */
+  compact?: boolean;
 };
 
 export function StatusBar({
@@ -36,6 +38,7 @@ export function StatusBar({
   onOpenMini,
   hasComposer,
   privateActive,
+  compact = false,
 }: Props) {
   const panelOpen = useChatStore((s) => s.panelOpen);
   const openPanel = useChatStore((s) => s.openPanel);
@@ -43,8 +46,17 @@ export function StatusBar({
   return (
     <footer className="flex h-8 shrink-0 items-center justify-between gap-3 border-t border-border/60 bg-card/60 px-3 text-[11px]">
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <WorkspaceEnvSelector onSelect={onWorkspaceChange} />
-        <CwdBreadcrumb cwd={cwd} filePath={filePath} home={home} onCd={onCd} />
+        {!compact && (
+          <>
+            <WorkspaceEnvSelector onSelect={onWorkspaceChange} />
+            <CwdBreadcrumb
+              cwd={cwd}
+              filePath={filePath}
+              home={home}
+              onCd={onCd}
+            />
+          </>
+        )}
         {privateActive ? (
           <Tooltip>
             <TooltipTrigger asChild>

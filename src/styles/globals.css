@@ -272,3 +272,11 @@ html *::-webkit-scrollbar {
 .terax-collapsible-content[data-state="closed"] {
   animation: terax-collapsible-up 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Mobile: iOS Safari auto-zooms when focusing an input whose font is < 16px.
+ * Bump the AI composer textarea so tapping it doesn't jolt the whole layout. */
+@media (max-width: 767px) {
+  [data-ai-input-bar] textarea {
+    font-size: 16px;
+  }
+}

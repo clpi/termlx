@@ -57,6 +57,8 @@ type Props = {
   onOpenSettings: () => void;
   searchTarget: SearchTarget;
   searchRef: RefObject<SearchInlineHandle | null>;
+  /** Phone/small-tablet layout: hide split, search, and keyboard shortcuts. */
+  isMobile?: boolean;
 };
 
 const COMPACT_WIDTH = 720;
@@ -78,6 +80,7 @@ export function Header({
   onOpenSettings,
   searchTarget,
   searchRef,
+  isMobile = false,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
@@ -210,49 +213,55 @@ export function Header({
           <HugeiconsIcon icon={SidebarLeftIcon} size={18} strokeWidth={1.75} />
         </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
-              title="Split terminal"
-              disabled={!canSplit}
-            >
-              <HugeiconsIcon icon={GridViewIcon} size={16} strokeWidth={1.75} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-44">
-            <DropdownMenuItem onSelect={() => onSplit("row")}>
-              <HugeiconsIcon
-                icon={LayoutTwoColumnIcon}
-                size={14}
-                strokeWidth={1.75}
-              />
-              <span className="flex-1">Split right</span>
-              {splitRightTokens && (
-                <span className="text-xs text-muted-foreground">
-                  {splitRightTokens}
-                </span>
-              )}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onSplit("col")}>
-              <HugeiconsIcon
-                icon={LayoutTwoRowIcon}
-                size={14}
-                strokeWidth={1.75}
-              />
-              <span className="flex-1">Split down</span>
-              {splitDownTokens && (
-                <span className="text-xs text-muted-foreground">
-                  {splitDownTokens}
-                </span>
-              )}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!isMobile && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+                title="Split terminal"
+                disabled={!canSplit}
+              >
+                <HugeiconsIcon
+                  icon={GridViewIcon}
+                  size={16}
+                  strokeWidth={1.75}
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-44">
+              <DropdownMenuItem onSelect={() => onSplit("row")}>
+                <HugeiconsIcon
+                  icon={LayoutTwoColumnIcon}
+                  size={14}
+                  strokeWidth={1.75}
+                />
+                <span className="flex-1">Split right</span>
+                {splitRightTokens && (
+                  <span className="text-xs text-muted-foreground">
+                    {splitRightTokens}
+                  </span>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onSplit("col")}>
+                <HugeiconsIcon
+                  icon={LayoutTwoRowIcon}
+                  size={14}
+                  strokeWidth={1.75}
+                />
+                <span className="flex-1">Split down</span>
+                {splitDownTokens && (
+                  <span className="text-xs text-muted-foreground">
+                    {splitDownTokens}
+                  </span>
+                )}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
-        {!IS_MAC && shortcutsButton}
+        {!IS_MAC && !isMobile && shortcutsButton}
       </div>
 
       {!IS_MAC && <span className="mx-1 h-5 w-px shrink-0 bg-border" />}
@@ -278,11 +287,13 @@ export function Header({
         <div data-tauri-drag-region className="h-full min-w-2 flex-1" />
       </div>
 
-      <SearchInline ref={searchRef} target={searchTarget} compact={compact} />
+      {!isMobile && (
+        <SearchInline ref={searchRef} target={searchTarget} compact={compact} />
+      )}
 
       {IS_MAC && (
         <>
-          {shortcutsButton}
+          {!isMobile && shortcutsButton}
           {settingsButton}
           {userMenu}
         </>

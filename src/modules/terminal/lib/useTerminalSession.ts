@@ -44,6 +44,9 @@ type Session = {
   lastH: number;
   lastCwd: string | null;
   pendingExit: number | null;
+  // Sticky modifier armed from the mobile accessory key bar, consumed by the
+  // next character the user types (so "Ctrl" then "c" sends ^C).
+  pendingMod: "ctrl" | "alt" | null;
   webglEnabled: boolean;
   webglAddon: WebglAddon | null;
   ready: Promise<void>;
@@ -100,6 +103,7 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     lastH: 0,
     lastCwd: null,
     pendingExit: null,
+    pendingMod: null,
     webglEnabled,
     webglAddon: null,
     ready: Promise.resolve(),
@@ -127,8 +131,20 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     return true;
   });
 
-  // Routes through session.pty so respawn doesn't need to rebind.
-  term.onData((data) => session.pty?.write(data));
+  // Routes through session.pty so respawn doesn't need to rebind. A sticky
+  // modifier armed from the mobile key bar (Ctrl/Alt) transforms the next
+  // typed character before it's sent.
+  term.onData((data) => {
+    let out = data;
+    if (session.pendingMod && data) {
+      out =
+        session.pendingMod === "ctrl"
+          ? applyCtrl(data)
+          : `\x1b${data}`;
+      session.pendingMod = null;
+    }
+    session.pty?.write(out);
+  });
 
   // PTY is opened lazily in attachSession after the first fit, so the shell
   // starts with the real terminal size and never flushes a 80x24-sized
@@ -510,10 +526,30 @@ export function useTerminalSession({
     );
   }, [leafId]);
 
-  return useMemo(
-    () => ({ write, focus, getBuffer, getSelection, applyTheme }),
-    [write, focus, getBuffer, getSelection, applyTheme],
+  const armModifier = useCallback(
+    (mod: "ctrl" | "alt" | null) => {
+      const s = sessions.get(leafId);
+      if (s) s.pendingMod = mod;
+    },
+    [leafId],
   );
+
+  return useMemo(
+    () => ({ write, focus, getBuffer, getSelection, applyTheme, armModifier }),
+    [write, focus, getBuffer, getSelection, applyTheme, armModifier],
+  );
+}
+
+// Maps a typed character to its Ctrl- control code (e.g. "c" -> \x03).
+function applyCtrl(data: string): string {
+  const code = data.charCodeAt(0);
+  const upper = data[0].toUpperCase().charCodeAt(0);
+  if (upper >= 64 && upper <= 95) {
+    return String.fromCharCode(upper & 0x1f) + data.slice(1);
+  }
+  // Non-letter input (already a control seq, arrow keys, etc.) passes through.
+  void code;
+  return data;
 }
 
 function isCtrlBackspace(event: KeyboardEvent): boolean {

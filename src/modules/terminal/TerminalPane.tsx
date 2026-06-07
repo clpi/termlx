@@ -8,6 +8,8 @@ export type TerminalPaneHandle = {
   focus: () => void;
   getBuffer: (maxLines?: number) => string | null;
   getSelection: () => string | null;
+  /** Arm a sticky modifier (mobile key bar) for the next typed character. */
+  armModifier: (mod: "ctrl" | "alt" | null) => void;
 };
 
 type Props = {
@@ -63,6 +65,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
         focus: () => session.focus(),
         getBuffer: (max?: number) => session.getBuffer(max),
         getSelection: () => session.getSelection(),
+        armModifier: (mod) => session.armModifier(mod),
       }),
       [session],
     );
@@ -74,6 +77,11 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(
         style={{
           visibility: visible ? "visible" : "hidden",
           pointerEvents: visible ? "auto" : "none",
+        }}
+        // Touch: tapping the terminal focuses it so the on-screen keyboard
+        // opens. (xterm handles mouse focus on desktop already.)
+        onPointerUp={(e) => {
+          if (e.pointerType === "touch") session.focus();
         }}
       />
     );

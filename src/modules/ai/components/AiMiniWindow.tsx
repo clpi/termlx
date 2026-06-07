@@ -92,6 +92,8 @@ export function AiMiniWindow() {
       className={cn(
         "no-scrollbar-deep fixed right-4 bottom-24 z-40 flex flex-col overflow-hidden",
         "h-[min(42rem,calc(100vh-7rem))] w-[min(34rem,calc(100vw-2rem))]",
+        // Phones: take over the screen instead of floating in a corner.
+        "max-md:inset-0 max-md:bottom-0 max-md:right-0 max-md:h-full max-md:w-full max-md:rounded-none",
         "rounded-2xl border border-border/60 bg-card text-[12px]",
         "shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_24px_48px_-12px_rgba(0,0,0,0.45),0_8px_16px_-8px_rgba(0,0,0,0.3)]",
         "ring-1 ring-black/5 dark:ring-white/5",
