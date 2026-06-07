@@ -19,3 +19,15 @@ esac
 
 # OSC 133;A marks the prompt start; the visible prompt is the cyan working dir.
 PS1='\[\e]133;A\a\]\[\e[36m\]\w\[\e[0m\] $ '
+
+# Terax arcade: launchable terminal mini-games with shared leaderboards.
+if [ -n "$TERAX_GAMES_DIR" ]; then
+  alias games='"${TERAX_NODE:-node}" "$TERAX_GAMES_DIR/launcher.mjs"'
+  alias arcade='"${TERAX_NODE:-node}" "$TERAX_GAMES_DIR/launcher.mjs"'
+  alias snake='"${TERAX_NODE:-node}" "$TERAX_GAMES_DIR/snake.mjs"'
+  alias minesweeper='"${TERAX_NODE:-node}" "$TERAX_GAMES_DIR/minesweeper.mjs"'
+  alias mines='"${TERAX_NODE:-node}" "$TERAX_GAMES_DIR/minesweeper.mjs"'
+  alias dungeon='"${TERAX_NODE:-node}" "$TERAX_GAMES_DIR/dungeon.mjs"'
+  alias 2048='"${TERAX_NODE:-node}" "$TERAX_GAMES_DIR/2048.mjs"'
+  printf '\033[2mtip: type \033[0m\033[1;36mgames\033[0m\033[2m to play the arcade (snake \302\267 mines \302\267 dungeon \302\267 2048)\033[0m\n'
+fi

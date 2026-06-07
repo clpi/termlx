@@ -103,8 +103,21 @@ async function aiHttpStream(args: any): Promise<void> {
 
 // --- generic invoke --------------------------------------------------------
 
+/** Open (or refocus) the settings page in a dedicated window. On the desktop
+ *  this was a native webview; on the web it's a same-origin popup window.
+ *  Settings persist to the shared store and prefs sync back via BroadcastChannel. */
+function openSettings(tab: string | null): void {
+  const url = `/settings.html${tab ? `?tab=${encodeURIComponent(tab)}` : ""}`;
+  // A stable window name reuses the same popup and navigates it to the new tab.
+  const win = window.open(url, "terax-settings", "width=920,height=680");
+  win?.focus();
+}
+
 export async function invoke<T = unknown>(cmd: string, args: any = {}): Promise<T> {
   switch (cmd) {
+    case "open_settings_window":
+      openSettings(args?.tab ?? null);
+      return undefined as T;
     case "pty_open":
       return ptyOpen(args) as Promise<T>;
     case "pty_write": {

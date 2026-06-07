@@ -3,8 +3,10 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import * as pty from "node-pty";
 import { sidFromCookieHeader, ensureSessionDirs } from "./session.mjs";
+import { userFromCookieHeader } from "./auth.mjs";
 
 const RCFILE = fileURLToPath(new URL("./shell-integration.bash", import.meta.url));
+const GAMES_DIR = fileURLToPath(new URL("./games", import.meta.url));
 
 /** Clamp a requested terminal cwd to the session workspace. Falls back to the
  *  workspace root for anything that resolves outside it. */
@@ -17,17 +19,41 @@ function safeCwd(requested, workspace) {
 
 const SHELL = process.env.SHELL || "bash";
 
+// Reject cross-origin websocket upgrades (CSWSH protection). In production the
+// Node server serves the app and WS on one origin, so Origin must match Host.
+// In dev the Vite proxy rewrites Host, so we don't enforce there; non-browser
+// clients (no Origin header) are allowed through.
+function originAllowed(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  if (process.env.NODE_ENV !== "production") return true;
+  try {
+    return new URL(origin).host === req.headers.host;
+  } catch {
+    return false;
+  }
+}
+
 export function attachPtyServer(httpServer) {
   const wss = new WebSocketServer({ server: httpServer, path: "/ws/pty" });
 
   wss.on("connection", (ws, req) => {
+    if (!originAllowed(req)) {
+      ws.close();
+      return;
+    }
     const sid = sidFromCookieHeader(req.headers.cookie);
     if (!sid) {
       ws.send(JSON.stringify({ type: "error", message: "No session" }));
       ws.close();
       return;
     }
-    const { workspace } = ensureSessionDirs(sid);
+    if (!userFromCookieHeader(req.headers.cookie)) {
+      ws.send(JSON.stringify({ type: "error", message: "Not authenticated" }));
+      ws.close();
+      return;
+    }
+    const { workspace, storesDir } = ensureSessionDirs(sid);
     ws.binaryType = "arraybuffer";
     let term = null;
 
@@ -63,6 +89,10 @@ export function attachPtyServer(httpServer) {
             HOME: workspace,
             PWD: cwd,
             TERM: "xterm-256color",
+            // Terminal arcade: launcher/games dir + shared leaderboard storage.
+            TERAX_GAMES_DIR: GAMES_DIR,
+            TERAX_GAMES_DATA: storesDir,
+            TERAX_NODE: process.execPath,
           },
         });
         term.onData((data) => {

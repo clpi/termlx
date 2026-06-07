@@ -3,6 +3,7 @@ import path from "node:path";
 import express from "express";
 import cookieParser from "cookie-parser";
 import { sessionMiddleware } from "./session.mjs";
+import * as auth from "./auth.mjs";
 import * as fsops from "./fsops.mjs";
 import * as shell from "./shell.mjs";
 import * as secrets from "./secrets.mjs";
@@ -17,6 +18,43 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "32mb" }));
 app.use(cookieParser());
 app.use("/api", sessionMiddleware);
+
+// --- authentication (public: signup / login / logout / me) ---
+app.post("/api/auth/signup", auth.rateLimit(), (req, res) => {
+  try {
+    const email = auth.signup(req.body?.email, req.body?.password);
+    const token = auth.login(email, req.body?.password);
+    res.cookie(auth.AUTH_COOKIE, token, auth.cookieOptions());
+    res.json({ ok: true, email });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message ?? e) });
+  }
+});
+app.post("/api/auth/login", auth.rateLimit(), (req, res) => {
+  try {
+    const token = auth.login(req.body?.email, req.body?.password);
+    res.cookie(auth.AUTH_COOKIE, token, auth.cookieOptions());
+    res.json({ ok: true, email: String(req.body?.email).trim().toLowerCase() });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e?.message ?? e) });
+  }
+});
+app.post("/api/auth/logout", (req, res) => {
+  auth.logout(req.cookies?.[auth.AUTH_COOKIE]);
+  res.clearCookie(auth.AUTH_COOKIE, { path: "/" });
+  res.json({ ok: true });
+});
+app.get("/api/auth/me", (req, res) => {
+  const email = auth.userFromToken(req.cookies?.[auth.AUTH_COOKIE]);
+  if (!email) {
+    res.status(401).json({ ok: false });
+    return;
+  }
+  res.json({ ok: true, email });
+});
+
+// Everything below requires a valid login.
+app.use("/api", auth.authGate);
 
 app.get("/api/session", (req, res) => {
   res.json({ home: req.session.workspace, platform: "linux", name: "Terax" });
