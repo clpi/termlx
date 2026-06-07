@@ -47,6 +47,9 @@ type Session = {
   // Sticky modifier armed from the mobile accessory key bar, consumed by the
   // next character the user types (so "Ctrl" then "c" sends ^C).
   pendingMod: "ctrl" | "alt" | null;
+  // Self-healing timer so an armed-but-never-used modifier can't linger and
+  // silently transform a later keystroke (e.g. after the user switches tabs).
+  pendingModTimer: ReturnType<typeof setTimeout> | null;
   webglEnabled: boolean;
   webglAddon: WebglAddon | null;
   ready: Promise<void>;
@@ -104,6 +107,7 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
     lastCwd: null,
     pendingExit: null,
     pendingMod: null,
+    pendingModTimer: null,
     webglEnabled,
     webglAddon: null,
     ready: Promise.resolve(),
@@ -142,6 +146,10 @@ function ensureSession(leafId: number, initialCwd?: string): Session {
           ? applyCtrl(data)
           : `\x1b${data}`;
       session.pendingMod = null;
+      if (session.pendingModTimer) {
+        clearTimeout(session.pendingModTimer);
+        session.pendingModTimer = null;
+      }
     }
     session.pty?.write(out);
   });
@@ -373,6 +381,7 @@ export function disposeSession(leafId: number): void {
   s.observer?.disconnect();
   if (s.fitTimer) clearTimeout(s.fitTimer);
   if (s.ptyTimer) clearTimeout(s.ptyTimer);
+  if (s.pendingModTimer) clearTimeout(s.pendingModTimer);
   s.pty?.close();
   s.term.dispose();
   sessions.delete(leafId);
@@ -529,7 +538,20 @@ export function useTerminalSession({
   const armModifier = useCallback(
     (mod: "ctrl" | "alt" | null) => {
       const s = sessions.get(leafId);
-      if (s) s.pendingMod = mod;
+      if (!s) return;
+      s.pendingMod = mod;
+      if (s.pendingModTimer) {
+        clearTimeout(s.pendingModTimer);
+        s.pendingModTimer = null;
+      }
+      // If armed without being consumed, drop it so it can't transform a
+      // keystroke the user makes much later (or after switching panes).
+      if (mod) {
+        s.pendingModTimer = setTimeout(() => {
+          s.pendingMod = null;
+          s.pendingModTimer = null;
+        }, 4000);
+      }
     },
     [leafId],
   );

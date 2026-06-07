@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Mod = "ctrl" | "alt";
 
@@ -31,13 +31,28 @@ export function MobileKeyBar({ onKey, onArmModifier }: Props) {
   const offset = useKeyboardOffset();
   const [armed, setArmed] = useState<Mod | null>(null);
 
-  // Visual hint only — the terminal consumes the modifier on the next typed
-  // character regardless. Auto-clear so a forgotten arm doesn't linger.
+  // Keep the latest clear callback so the unmount cleanup below (which must run
+  // with empty deps) always targets the current terminal session.
+  const onArmModifierRef = useRef(onArmModifier);
+  onArmModifierRef.current = onArmModifier;
+
+  // Auto-clear so a forgotten arm doesn't linger. Crucially this must also clear
+  // the session's pending modifier, or the UI shows nothing armed while the
+  // terminal still transforms the next keystroke.
   useEffect(() => {
     if (!armed) return;
-    const id = setTimeout(() => setArmed(null), 4000);
+    const id = setTimeout(() => {
+      setArmed(null);
+      onArmModifierRef.current(null);
+    }, 4000);
     return () => clearTimeout(id);
   }, [armed]);
+
+  // On unmount (e.g. switching away from a terminal tab) drop any latent
+  // modifier so it can't mutate a future keystroke in a different session.
+  useEffect(() => {
+    return () => onArmModifierRef.current(null);
+  }, []);
 
   const tapKey = (seq: string) => {
     if (armed) {

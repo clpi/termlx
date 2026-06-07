@@ -1,1 +1,2 @@
 - [Terax Tauri→web conversion](terax-web-conversion.md) — Node backend + Vite-aliased browser shims replace Rust/Tauri; shared-workspace isolation model, optional auth (guest-by-default, TERAX_REQUIRE_AUTH override) + user profiles/avatars/directory, PTY terminal arcade, settings-window-on-web, SPA fallback, and intentional non-fixes.
+- [Sandbox kills long shell jobs](sandbox-long-jobs.md) — `vite build`/full `tsc` can't finish here; verify via LSP diagnostics + Vite HMR + screenshot.
