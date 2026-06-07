@@ -1,6 +1,16 @@
+import path from "node:path";
 import { WebSocketServer } from "ws";
 import * as pty from "node-pty";
 import { sidFromCookieHeader, ensureSessionDirs } from "./session.mjs";
+
+/** Clamp a requested terminal cwd to the session workspace. Falls back to the
+ *  workspace root for anything that resolves outside it. */
+function safeCwd(requested, workspace) {
+  if (!requested) return workspace;
+  const abs = path.resolve(workspace, requested);
+  if (abs === workspace || abs.startsWith(workspace + path.sep)) return abs;
+  return workspace;
+}
 
 const SHELL = process.env.SHELL || "bash";
 
@@ -31,10 +41,7 @@ export function attachPtyServer(httpServer) {
       }
       if (msg.type === "open") {
         if (term) return;
-        const cwd =
-          msg.cwd && (msg.cwd === workspace || msg.cwd.startsWith(workspace))
-            ? msg.cwd
-            : workspace;
+        const cwd = safeCwd(msg.cwd, workspace);
         term = pty.spawn(SHELL, [], {
           name: "xterm-256color",
           cols: msg.cols || 80,

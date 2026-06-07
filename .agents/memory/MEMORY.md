@@ -1,0 +1,1 @@
+- [Terax Tauri→web conversion](terax-web-conversion.md) — Node backend + Vite-aliased browser shims replace Rust/Tauri; isolation model, SPA-fallback, and intentional non-fixes.

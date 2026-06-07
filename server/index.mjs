@@ -13,6 +13,7 @@ import { attachPtyServer } from "./pty.mjs";
 const IS_PROD = process.env.NODE_ENV === "production";
 const PORT = process.env.PORT || process.env.BACKEND_PORT || (IS_PROD ? 5000 : 3001);
 const app = express();
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "32mb" }));
 app.use(cookieParser());
 app.use("/api", sessionMiddleware);
